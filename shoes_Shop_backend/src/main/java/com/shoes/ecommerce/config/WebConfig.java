@@ -20,6 +20,9 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         String uploadPath = System.getProperty("user.dir") + "/uploads/";
-        registry.addResourceHandler("/uploads/**").addResourceLocations("file:" + uploadPath);
+        // also serve uploads from parent workspace folder in case server working dir differs
+        String parentUpload = java.nio.file.Paths.get(System.getProperty("user.dir")).getParent().resolve("uploads").toAbsolutePath().toString() + "/";
+        registry.addResourceHandler("/uploads/**").addResourceLocations("file:" + uploadPath, "file:" + parentUpload);
+        System.out.println("[WebConfig] Serving uploads from: " + uploadPath + " and " + parentUpload);
     }
 }

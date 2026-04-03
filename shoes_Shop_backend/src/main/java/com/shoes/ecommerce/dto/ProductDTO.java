@@ -1,14 +1,19 @@
 package com.shoes.ecommerce.dto;
 
+import java.util.List;
+
 public class ProductDTO {
     private Long id;
     private String name;
     private String description;
     private Double price;
+    private Double oldPrice;
     private String brand;
     private boolean hot;
     private String image;
     private String detailImage;
+    private List<String> detailImages;
+    private String inventory; // JSON string for per-color inventory
     private String detail;
     private Double discount;
     private String size;
@@ -21,13 +26,14 @@ public class ProductDTO {
 
     public ProductDTO() {}
 
-    public ProductDTO(Long id, String name, String description, Double price, String brand, boolean hot,
+    public ProductDTO(Long id, String name, String description, Double price, Double oldPrice, String brand, boolean hot,
                       String image, String detailImage, String detail, Double discount, String size,
                       Integer qty39, Integer qty40, Integer qty41, Integer qty42, Integer qty43, Integer qty44) {
         this.id = id;
         this.name = name;
         this.description = description;
         this.price = price;
+        this.oldPrice = oldPrice;
         this.brand = brand;
         this.hot = hot;
         this.image = image;
@@ -54,6 +60,8 @@ public class ProductDTO {
 
     public Double getPrice() { return price; }
     public void setPrice(Double price) { this.price = price; }
+    public Double getOldPrice() { return oldPrice; }
+    public void setOldPrice(Double oldPrice) { this.oldPrice = oldPrice; }
     public String getBrand() { return brand; }
     public void setBrand(String brand) { this.brand = brand; }
     public boolean isHot() { return hot; }
@@ -80,4 +88,8 @@ public class ProductDTO {
     public void setQty43(Integer qty43) { this.qty43 = qty43; }
     public Integer getQty44() { return qty44; }
     public void setQty44(Integer qty44) { this.qty44 = qty44; }
+    public List<String> getDetailImages() { return detailImages; }
+    public void setDetailImages(List<String> detailImages) { this.detailImages = detailImages; }
+    public String getInventory() { return inventory; }
+    public void setInventory(String inventory) { this.inventory = inventory; }
 }

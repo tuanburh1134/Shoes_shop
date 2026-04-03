@@ -11,6 +11,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 @Configuration
 @EnableMethodSecurity
@@ -42,16 +43,21 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.cors().and().csrf().disable();
-
         http.authorizeHttpRequests(auth -> auth
-            .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-            .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
-            .requestMatchers("/api/auth/**").permitAll()
-            .requestMatchers(HttpMethod.POST, "/api/products/**").hasRole("ADMIN")
-            .requestMatchers(HttpMethod.PUT, "/api/products/**").hasRole("ADMIN")
-            .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasRole("ADMIN")
+            .requestMatchers(new AntPathRequestMatcher("/**", "OPTIONS")).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/api/products/**", "GET")).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/api/ai/**")).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/api/auth/**")).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/api/products/**", "POST")).hasRole("ADMIN")
+            .requestMatchers(new AntPathRequestMatcher("/api/products/**", "PUT")).hasRole("ADMIN")
+            .requestMatchers(new AntPathRequestMatcher("/api/products/**", "DELETE")).hasRole("ADMIN")
+            .requestMatchers(new AntPathRequestMatcher("/api/orders", "POST")).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/h2-console/**")).permitAll()
             .anyRequest().authenticated()
         );
+
+        // Allow H2 console frames when using the embedded H2 web servlet
+        http.headers().frameOptions().disable();
 
         http.httpBasic();
         return http.build();
