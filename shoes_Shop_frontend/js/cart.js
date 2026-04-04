@@ -3,6 +3,21 @@
     const KEY = 'cart_items_v1';
     const BACKEND = 'http://localhost:8080';
 
+    function getOrCreateDeviceId(){
+        let deviceId = localStorage.getItem('device_id_v1');
+        if(deviceId) return deviceId;
+
+        try{
+            deviceId = (window.crypto && typeof window.crypto.randomUUID === 'function')
+                ? window.crypto.randomUUID()
+                : ('dev-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+        }catch(e){
+            deviceId = 'dev-' + Date.now();
+        }
+        localStorage.setItem('device_id_v1', deviceId);
+        return deviceId;
+    }
+
     function readCart(){
         try{
             const raw = localStorage.getItem(KEY);
@@ -67,6 +82,25 @@
         localStorage.removeItem(KEY);
         localStorage.setItem('cartUpdatedAt', String(Date.now()));
         updateBadge();
+    }
+
+    function addOrderNotifications(orderId){
+        if(!window.notifications || typeof window.notifications.add !== 'function') return;
+        const idText = orderId != null ? String(orderId) : ('o_' + Date.now());
+        try{
+            window.notifications.add({
+                title: 'Đơn hàng mới',
+                message: 'Đơn ' + idText + ' chờ duyệt',
+                target: 'admin',
+                orderId: idText
+            });
+            window.notifications.add({
+                title: 'Đơn hàng đang chờ xác nhận',
+                message: 'Đơn ' + idText + ' đã được tạo và đang chờ admin xác nhận',
+                target: 'user',
+                orderId: idText
+            });
+        }catch(e){ console.debug('Add order notifications failed', e); }
     }
 
     // render cart page if present
@@ -174,23 +208,30 @@
                 // payload: { address, phone, method, discount }
                 if(payload.method === 'cash'){
                     // attempt server-side checkout first (will decrement inventory)
+                    const deviceId = getOrCreateDeviceId();
                     const orderPayload = {
                         items: cartNow.map(i=>({ name: i.name, size: i.size, qty: i.qty, price: i.price, productId: i.id })),
                         total: total,
                         address: payload.address,
                         phone: payload.phone,
-                        method: payload.method
+                        method: payload.method,
+                        deviceId: deviceId
                     }
                     try{
                         const cur = JSON.parse(localStorage.getItem('currentUser')||'null')||null
                         const headers = {}
                         if(cur && cur.username && cur.password) headers['Authorization'] = 'Basic ' + btoa(cur.username + ':' + cur.password)
                         const res = await axios.post(BACKEND + '/api/orders', orderPayload, { headers })
+                        const createdOrderId = res && res.data && res.data.id ? res.data.id : ('o_' + Date.now())
+                        try{
+                            if(cur && cur.username && cur.password && deviceId){
+                                await axios.post(BACKEND + '/api/devices/register', { deviceId }, { headers })
+                            }
+                        }catch(e){ console.debug('Device register skipped/failed', e) }
                         // success: clear cart and show notification
                         clearCart(); renderCartPage();
+                        addOrderNotifications(createdOrderId)
                         if(window.showNotification) window.showNotification('Đặt hàng thành công','Đơn hàng đã được gửi','success',2200)
-                        // notify admin locally as well
-                        try{ if(window.notifications && window.notifications.add){ window.notifications.add({ title: 'Đơn hàng mới', message: 'Đơn đã được tạo', target: 'admin' }) } }catch(e){}
                         return;
                     }catch(err){
                         console.debug('Server checkout failed, falling back to local orders', err)
@@ -209,6 +250,7 @@
                         phone: payload.phone,
                         method: payload.method,
                         discount: payload.discount || null,
+                        deviceId: deviceId,
                         status: 'pending',
                         userId: (function(){ try{ const cu = JSON.parse(localStorage.getItem('currentUser')||'null'); return cu && (cu.id || cu.email) ? (cu.id || cu.email) : null }catch(e){return null} })(),
                         userName: (function(){ try{ const cu = JSON.parse(localStorage.getItem('currentUser')||'null'); return cu && (cu.name || cu.fullName || cu.username) ? (cu.name || cu.fullName || cu.username) : null }catch(e){return null} })(),
@@ -216,7 +258,7 @@
                     }
                     orders.unshift(order)
                     localStorage.setItem(ordersKey, JSON.stringify(orders))
-                    try{ if(window.notifications && window.notifications.add){ window.notifications.add({ title: 'Đơn hàng mới', message: 'Đơn ' + order.id + ' chờ duyệt', target: 'admin', orderId: order.id }) } }catch(e){}
+                    addOrderNotifications(order.id)
                     clearCart(); renderCartPage();
                     if(window.showNotification) window.showNotification('Đặt hàng thành công','Đơn hàng chờ xác nhận','success',2200)
                 } else {
@@ -340,8 +382,16 @@
                                     const phone = modal.querySelector('#checkout-phone').value.trim()
                                     const method = modal.querySelector('input[name="payMethod"]:checked').value
                                     const discount = modal.querySelector('#checkout-discount').value.trim()
-                                    if(!address){ if(window.showNotification) window.showNotification('Vui lòng nhập địa chỉ','error'); return }
-                                    if(!phone){ if(window.showNotification) window.showNotification('Vui lòng nhập số điện thoại','error'); return }
+                                    if(!address){ 
+                                        if(window.showNotification) window.showNotification('Vui lòng nhập địa chỉ','error');
+                                        else alert('Vui lòng nhập địa chỉ');
+                                        return;
+                                    }
+                                    if(!phone){ 
+                                        if(window.showNotification) window.showNotification('Vui lòng nhập số điện thoại','error');
+                                        else alert('Vui lòng nhập số điện thoại');
+                                        return;
+                                    }
                                     cleanup(); resolve({ address, phone, method, discount })
                                 })
                                 modal.addEventListener('hidden.bs.modal', function(){ try{ modal.parentNode && modal.parentNode.removeChild(modal) }catch(e){} resolve(null) })

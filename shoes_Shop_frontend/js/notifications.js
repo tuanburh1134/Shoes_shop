@@ -9,6 +9,39 @@
   function read(){ try{ return JSON.parse(localStorage.getItem(KEY)||'[]') }catch(e){return[]} }
   function write(list){ localStorage.setItem(KEY, JSON.stringify(list)); localStorage.setItem(TS, Date.now()); }
 
+  function getCurrentUser(){
+    try{ return JSON.parse(localStorage.getItem('currentUser')||'null') || null }catch(e){ return null }
+  }
+
+  function getRole(){
+    try{
+      const cur = getCurrentUser();
+      const role = cur && cur.role ? String(cur.role).toLowerCase() : 'user';
+      return role;
+    }catch(e){ return 'user' }
+  }
+
+  function canSeeNotification(n){
+    const target = n && n.target != null ? String(n.target).trim() : '';
+    if(!target || target === 'all') return true;
+
+    const cur = getCurrentUser();
+    const role = getRole();
+    const t = target.toLowerCase();
+
+    if(t === role) return true;
+    // Backward-compatible: notification for "user" should be visible to any non-admin account.
+    if(t === 'user' && role !== 'admin') return true;
+
+    if(cur){
+      const candidates = [cur.username, cur.email, cur.id]
+        .filter(Boolean)
+        .map(v => String(v).toLowerCase());
+      if(candidates.includes(t)) return true;
+    }
+    return false;
+  }
+
   function addNotification(n){
     const list = read();
     n.id = n.id || ('n_' + Date.now())
@@ -35,13 +68,11 @@
       const btn = document.getElementById('notify-btn')
       if(!btn) return
       const list = read()
-      const unread = list.filter(x=>!x.read && (!x.target || x.target==='all' || x.target===getRole())).length
+      const unread = list.filter(x=>!x.read && canSeeNotification(x)).length
       const badge = btn.querySelector('.notify-badge')
       if(badge) badge.textContent = unread>0?String(unread):''
     }catch(e){console.warn(e)}
   }
-
-  function getRole(){ try{ const cur = JSON.parse(localStorage.getItem('currentUser')||'null'); return cur && cur.role ? cur.role : 'user' }catch(e){return 'user'} }
 
   function renderPanel(){
     try{
@@ -63,7 +94,7 @@
         document.body.appendChild(panel)
       }
       // show only unread notifications in the panel
-      let list = read().filter(x=> !x.read && (!x.target || x.target==='all' || x.target===getRole()))
+      let list = read().filter(x=> !x.read && canSeeNotification(x))
       // filter out notifications that reference orders already approved (so they disappear)
       try{
         const orders = JSON.parse(localStorage.getItem('orders_v1')||'[]') || []

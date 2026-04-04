@@ -1,5 +1,8 @@
 // Simple client-side auth for demo purposes
 (function(){
+  const BACKEND = 'http://localhost:8080'
+  const AUTH_API = BACKEND + '/api/auth'
+
   function $(sel){return document.querySelector(sel)}
   function getUsers(){
     try{return JSON.parse(localStorage.getItem('users')||'[]')||[];}catch(e){return[]}
@@ -7,6 +10,33 @@
   function saveUsers(u){localStorage.setItem('users',JSON.stringify(u))}
   function setCurrent(user){localStorage.setItem('currentUser',JSON.stringify(user))}
   function getCurrent(){try{return JSON.parse(localStorage.getItem('currentUser')||'null')}catch(e){return null}}
+  function notify(title, msg){
+    if(window.showNotification) window.showNotification(title, msg || '', 'error', 2600)
+    else alert(title + (msg ? ('\n' + msg) : ''))
+  }
+  function success(title, msg){
+    if(window.showNotification) window.showNotification(title, msg || '', 'success', 1800)
+    else alert(title + (msg ? ('\n' + msg) : ''))
+  }
+  function apiMessage(err, fallback){
+    try{
+      if(err && err.response && err.response.data){
+        const d = err.response.data
+        if(typeof d === 'string' && d.trim()) return d
+        if(d.message) return d.message
+      }
+      if(err && err.message) return err.message
+    }catch(e){}
+    return fallback || 'Có lỗi xảy ra'
+  }
+  async function confirmLogout(){
+    try{
+      if(window.showConfirm){
+        return await window.showConfirm('Bạn có chắc muốn đăng xuất không?', 'Xác nhận đăng xuất')
+      }
+    }catch(e){}
+    return confirm('Bạn có chắc muốn đăng xuất không?')
+  }
 
   // Seed an admin user for demo if no users exist
   try{
@@ -96,11 +126,15 @@
 
   var logoutLink = document.getElementById('logout-link')
   if(logoutLink){
-    logoutLink.addEventListener('click', function(e){
+    logoutLink.addEventListener('click', async function(e){
       e.preventDefault()
+      var ok = await confirmLogout()
+      if(!ok) return
       localStorage.removeItem('currentUser')
       updateHeader()
-      window.location.href = 'index.html'
+      if(window.showNotification) window.showNotification('Đăng xuất thành công', '', 'success', 1200)
+      else alert('Đăng xuất thành công')
+      setTimeout(function(){ window.location.href = 'index.html' }, 300)
     })
   }
 
@@ -109,43 +143,64 @@
 
   // If on login page, attach login handler
   if(document.getElementById('login-form')){
-    document.getElementById('login-form').addEventListener('submit', function(e){
+    document.getElementById('login-form').addEventListener('submit', async function(e){
       e.preventDefault()
       var u = document.getElementById('login-username').value.trim()
       var p = document.getElementById('login-password').value
-      var users = getUsers()
-      var found = users.find(x=>x.username===u && x.password===p)
-      if(!found){alert('Thông tin đăng nhập không đúng');return}
-      // store role and password (client-side demo) so admin actions can send Basic auth
-      setCurrent({
-        username:found.username,
-        password: found.password,
-        role: found.role || 'user',
-        addresses: found.addresses || [],
-        avatarUrl: found.avatarUrl,
-        avatarDataUrl: found.avatarDataUrl,
-        email: found.email
-      })
-      alert('Đăng nhập thành công')
-      window.location.href = 'index.html'
+      if(!u || !p){ notify('Đăng nhập thất bại', 'Vui lòng nhập đầy đủ thông tin'); return }
+      try{
+        const res = await axios.post(AUTH_API + '/login', { username: u, password: p })
+        const role = res && res.data && res.data.role ? res.data.role : 'user'
+        setCurrent({ username:u, password:p, role:role })
+        // load profile if available
+        try{
+          const auth = 'Basic ' + btoa(u + ':' + p)
+          const me = await axios.get(BACKEND + '/api/me', { headers: { Authorization: auth } })
+          if(me && me.data){
+            const cur = getCurrent() || {}
+            cur.email = me.data.email || cur.email
+            cur.addresses = me.data.addresses || cur.addresses || []
+            cur.avatarUrl = me.data.avatarUrl || cur.avatarUrl
+            setCurrent(cur)
+          }
+        }catch(err){ /* ignore profile fetch error */ }
+
+        success('Đăng nhập thành công', '')
+        window.location.href = 'index.html'
+      }catch(err){
+        const msg = apiMessage(err, 'Thông tin đăng nhập không đúng')
+        if(String(msg).toLowerCase().indexOf('account.locked') >= 0){
+          notify('Tài khoản đang bị khóa', 'Bạn không thể đăng nhập lúc này')
+        } else {
+          notify('Đăng nhập thất bại', msg)
+        }
+      }
     })
   }
 
   // If on register page, attach register handler
   if(document.getElementById('register-form')){
-    document.getElementById('register-form').addEventListener('submit', function(e){
+    document.getElementById('register-form').addEventListener('submit', async function(e){
       e.preventDefault()
       var u = document.getElementById('reg-username').value.trim()
       var p = document.getElementById('reg-password').value
-      if(!u || !p){alert('Vui lòng nhập đầy đủ');return}
-      var users = getUsers()
-      if(users.find(x=>x.username===u)){alert('Tên đăng nhập đã tồn tại');return}
-      var user = {username:u,password:p, role:'user', addresses: []}
-      users.push(user)
-      saveUsers(users)
-      setCurrent({username:u, password:p, role:'user', addresses: []})
-      alert('Đăng ký thành công')
-      window.location.href = 'index.html'
+      var emailEl = document.getElementById('reg-email')
+      var email = emailEl && emailEl.value ? emailEl.value.trim() : (u ? (u + '@example.com') : '')
+      if(!u || !p){ notify('Đăng ký thất bại', 'Vui lòng nhập đầy đủ'); return }
+      try{
+        await axios.post(AUTH_API + '/register', { username: u, password: p, email: email })
+        // keep local mirror for compatibility screens
+        try{
+          var users = getUsers()
+          if(!users.find(x=>x.username===u)) users.push({username:u,password:p,role:'user',email:email,addresses:[]})
+          saveUsers(users)
+        }catch(er){}
+        setCurrent({username:u, password:p, role:'user', email:email, addresses: []})
+        success('Đăng ký thành công', '')
+        window.location.href = 'index.html'
+      }catch(err){
+        notify('Đăng ký thất bại', apiMessage(err, 'Không thể tạo tài khoản'))
+      }
     })
   }
 

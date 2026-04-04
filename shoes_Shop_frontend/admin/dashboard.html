@@ -33,71 +33,47 @@
       </div>
 
       <div class="row g-3 mb-4">
-        <div class="col-md-4">
-          <div class="card p-3">
-            <div class="small text-muted">Vốn</div>
-            <div class="h4">20.000</div>
+        <div class="col-12 col-md-6 d-flex">
+          <div class="card p-3 bg-info text-white w-100 h-100">
+            <div class="small">Doanh thu tháng hiện tại</div>
+            <div class="h3 mb-0" id="monthly-revenue-value">0 đ</div>
           </div>
         </div>
-        <div class="col-md-4">
-          <div class="card p-3 bg-info text-white">
-            <div class="small">Thu</div>
-            <div class="h4">50.000 ₫</div>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <div class="card p-3">
-            <div class="small text-muted">Lãi</div>
-            <div class="h4">2000</div>
+        <div class="col-12 col-md-6 d-flex">
+          <div class="card p-3 w-100 h-100" id="monthly-diff-card">
+            <div class="small text-muted">Lãi/Lỗ so với tháng trước</div>
+            <div class="h3 mb-0" id="monthly-diff-value">0 đ</div>
+            <div class="small mt-1" id="monthly-diff-note"></div>
           </div>
         </div>
       </div>
 
       <div class="card mb-4 p-3">
-        <h5>Doanh thu năm</h5>
-        <div style="height:260px;background:#fafafa;border:1px dashed #eee;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#999">Biểu đồ (placeholder)</div>
+        <h5>Biểu đồ doanh thu theo tháng - <span id="revenue-year-label"></span></h5>
+        <div id="year-revenue-chart"></div>
       </div>
 
       <div class="card p-3">
-        <h5>Lịch sử thu chi</h5>
-        <table class="table table-borderless mt-3">
+        <h5>Top 10 giày bán chạy nhất</h5>
+        <table class="table table-hover mt-3">
           <thead>
             <tr>
-              <th>Danh mục</th>
-              <th>ID</th>
-              <th>Tiền</th>
-              <th>Ngày</th>
+              <th>Hạng</th>
+              <th>Tên giày</th>
+              <th>Số lượng bán</th>
+              <th>Doanh thu</th>
             </tr>
           </thead>
-          <tbody>
-            <tr><td>Nhập giày</td><td>#7890328</td><td class="text-danger">-13.000 ₫</td><td>16/3 14:30</td></tr>
-            <tr><td>Nhập giày</td><td>#3948509</td><td class="text-danger">-24.000 ₫</td><td>15/3 15:30</td></tr>
-            <tr><td>Bán lẻ</td><td>#2980298</td><td class="text-success">+50.000 ₫</td><td>14/3 14:30</td></tr>
-          </tbody>
+          <tbody id="top-products-body"></tbody>
         </table>
       </div>
-
-      <script>
-        // mark active link in sidebar
-        (function(){
-          try{
-            var links = document.querySelectorAll('.admin-sidebar a');
-            var path = window.location.pathname.replace(/\\/g,'/');
-            links.forEach(function(a){
-              var href = a.getAttribute('href');
-              if(!href) return;
-              var linkPath = href.indexOf('http')===0 ? (new URL(href)).pathname : href;
-              if(path.endsWith(linkPath) || path.indexOf(linkPath) !== -1){
-                a.classList.add('active');
-              }
-            });
-          }catch(e){console.warn(e)}
-        })();
-      </script>
     </main>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="../js/auth.js"></script>
+  <script src="../js/admin-dashboard.js?v=1"></script>
+  <script src="../js/footer-contact.js?v=4"></script>
 </body>
 </html>
