@@ -18,6 +18,9 @@ public class Product {
     @Column(nullable = false)
     private Double price;
 
+    @Column(name = "old_price")
+    private Double oldPrice;
+
     @Column(length = 100)
     private String brand;
 
@@ -26,6 +29,12 @@ public class Product {
 
     @Column(name = "detail_image", length = 255)
     private String detailImage;
+
+    @Column(name = "detail_images", columnDefinition = "TEXT")
+    private String detailImages; // JSON array string of detail image URLs
+
+    @Column(name = "inventory", columnDefinition = "TEXT")
+    private String inventory; // JSON structure: {"white":{"39":1,...},"black":{...}}
 
     @Column(length = 2000)
     private String detail;
@@ -75,12 +84,18 @@ public class Product {
     public void setDescription(String description) { this.description = description; }
     public Double getPrice() { return price; }
     public void setPrice(Double price) { this.price = price; }
+    public Double getOldPrice() { return oldPrice; }
+    public void setOldPrice(Double oldPrice) { this.oldPrice = oldPrice; }
     public String getBrand() { return brand; }
     public void setBrand(String brand) { this.brand = brand; }
     public String getImage() { return image; }
     public void setImage(String image) { this.image = image; }
     public String getDetailImage() { return detailImage; }
     public void setDetailImage(String detailImage) { this.detailImage = detailImage; }
+    public String getDetailImages() { return detailImages; }
+    public void setDetailImages(String detailImages) { this.detailImages = detailImages; }
+    public String getInventory() { return inventory; }
+    public void setInventory(String inventory) { this.inventory = inventory; }
     public String getDetail() { return detail; }
     public void setDetail(String detail) { this.detail = detail; }
     public Double getDiscount() { return discount; }

@@ -3,7 +3,7 @@ package com.shoes.ecommerce.entity;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "user")
+@Table(name = "users")
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -17,9 +17,19 @@ public class User {
 
     @Column
     private String email;
+    @Column(columnDefinition = "TEXT")
+    private String addresses; // JSON array string of addresses
+    @Column(name = "avatar_url")
+    private String avatarUrl;
     
     @Column(nullable = false)
     private String role = "user";
+
+    @Column(name = "banned_until")
+    private Long bannedUntil; // epoch millis until which account is banned
+
+    @Column(name = "banned_forever")
+    private Boolean bannedForever = false;
 
     public User() {}
 
@@ -45,6 +55,14 @@ public class User {
     public void setPassword(String password) { this.password = password; }
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
+    public String getAddresses() { return addresses; }
+    public void setAddresses(String addresses) { this.addresses = addresses; }
+    public String getAvatarUrl() { return avatarUrl; }
+    public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+    public Long getBannedUntil() { return bannedUntil; }
+    public void setBannedUntil(Long bannedUntil) { this.bannedUntil = bannedUntil; }
+    public Boolean getBannedForever() { return bannedForever; }
+    public void setBannedForever(Boolean bannedForever) { this.bannedForever = bannedForever; }
 }

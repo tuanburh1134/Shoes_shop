@@ -45,6 +45,14 @@ public class ProductController {
         return ResponseEntity.ok(productService.listAll());
     }
 
+    @GetMapping("{id}")
+    public ResponseEntity<ProductDTO> getOne(@PathVariable Long id) {
+        logger.debug("GET /api/products/{} called", id);
+        ProductDTO dto = productService.getById(id);
+        if (dto == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(dto);
+    }
+
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ProductDTO> create(@RequestBody ProductDTO dto, Principal principal) {
         logger.info("POST /api/products by {}", principal == null ? "anonymous" : principal.getName());
@@ -58,6 +66,7 @@ public class ProductController {
             @RequestParam String name,
             @RequestParam(required = false) String description,
             @RequestParam(required = false) Double price,
+            @RequestParam(required = false, name = "oldPrice") Double oldPrice,
             @RequestParam(required = false) String brand,
             @RequestParam(required = false) String detail,
             @RequestParam(required = false) Double discount,
@@ -70,6 +79,8 @@ public class ProductController {
             @RequestParam(required = false) Integer qty44,
             @RequestPart(required = false) MultipartFile image,
             @RequestPart(required = false, name = "detailImage") MultipartFile detailImage,
+            @RequestPart(required = false, name = "detailImages") MultipartFile[] detailImages,
+            @RequestParam(required = false) String inventory,
             Principal principal) {
 
         logger.info("POST /api/products/upload by {}", principal == null ? "anonymous" : principal.getName());
@@ -77,6 +88,7 @@ public class ProductController {
         dto.setName(name);
         dto.setDescription(description);
         dto.setPrice(price);
+        dto.setOldPrice(oldPrice);
         dto.setBrand(brand);
         dto.setDetail(detail);
         dto.setDiscount(discount);
@@ -97,12 +109,29 @@ public class ProductController {
                 Files.copy(image.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
                 dto.setImage("/uploads/" + filename);
             }
+            // single detailImage (backward compatible)
             if (detailImage != null && !detailImage.isEmpty()) {
                 String filename = System.currentTimeMillis() + "_det_" + StringUtils.cleanPath(detailImage.getOriginalFilename());
                 Path target = Path.of(uploadDir).resolve(filename);
                 Files.copy(detailImage.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
                 dto.setDetailImage("/uploads/" + filename);
             }
+            // multiple detail images
+            if (detailImages != null && detailImages.length > 0) {
+                java.util.List<String> saved = new java.util.ArrayList<>();
+                int count = 0;
+                for (MultipartFile f : detailImages) {
+                    if (f == null || f.isEmpty()) continue;
+                    if (count >= 10) break; // limit to 10
+                    String filename = System.currentTimeMillis() + "_det_" + count + "_" + StringUtils.cleanPath(f.getOriginalFilename());
+                    Path target = Path.of(uploadDir).resolve(filename);
+                    Files.copy(f.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+                    saved.add("/uploads/" + filename);
+                    count++;
+                }
+                dto.setDetailImages(saved);
+            }
+            if(inventory != null) dto.setInventory(inventory);
         } catch (IOException ex) {
             logger.error("Failed to save uploaded files", ex);
             return ResponseEntity.status(500).build();
@@ -127,6 +156,7 @@ public class ProductController {
             @RequestParam String name,
             @RequestParam(required = false) String description,
             @RequestParam(required = false) Double price,
+            @RequestParam(required = false, name = "oldPrice") Double oldPrice,
             @RequestParam(required = false) String brand,
             @RequestParam(required = false) String detail,
             @RequestParam(required = false) Double discount,
@@ -139,6 +169,8 @@ public class ProductController {
             @RequestParam(required = false) Integer qty44,
             @RequestPart(required = false) MultipartFile image,
             @RequestPart(required = false, name = "detailImage") MultipartFile detailImage,
+            @RequestPart(required = false, name = "detailImages") MultipartFile[] detailImages,
+            @RequestParam(required = false) String inventory,
             Principal principal) {
 
         logger.info("PUT /api/products/{}/upload by {}", id, principal == null ? "anonymous" : principal.getName());
@@ -146,6 +178,7 @@ public class ProductController {
         dto.setName(name);
         dto.setDescription(description);
         dto.setPrice(price);
+        dto.setOldPrice(oldPrice);
         dto.setBrand(brand);
         dto.setDetail(detail);
         dto.setDiscount(discount);
@@ -172,6 +205,21 @@ public class ProductController {
                 Files.copy(detailImage.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
                 dto.setDetailImage("/uploads/" + filename);
             }
+            if (detailImages != null && detailImages.length > 0) {
+                java.util.List<String> saved = new java.util.ArrayList<>();
+                int count = 0;
+                for (MultipartFile f : detailImages) {
+                    if (f == null || f.isEmpty()) continue;
+                    if (count >= 10) break;
+                    String filename = System.currentTimeMillis() + "_det_" + count + "_" + StringUtils.cleanPath(f.getOriginalFilename());
+                    Path target = Path.of(uploadDir).resolve(filename);
+                    Files.copy(f.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+                    saved.add("/uploads/" + filename);
+                    count++;
+                }
+                dto.setDetailImages(saved);
+            }
+            if(inventory != null) dto.setInventory(inventory);
         } catch (IOException ex) {
             logger.error("Failed to save uploaded files", ex);
             return ResponseEntity.status(500).build();
