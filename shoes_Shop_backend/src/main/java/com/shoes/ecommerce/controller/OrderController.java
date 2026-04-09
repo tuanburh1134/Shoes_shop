@@ -2,6 +2,7 @@ package com.shoes.ecommerce.controller;
 
 import com.shoes.ecommerce.entity.OrderEntity;
 import com.shoes.ecommerce.service.OrderService;
+import com.shoes.ecommerce.service.NotificationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -12,8 +13,12 @@ import java.util.List;
 @RequestMapping("/api/orders")
 public class OrderController {
     private final OrderService orderService;
+    private final NotificationService notificationService;
 
-    public OrderController(OrderService orderService){ this.orderService = orderService; }
+    public OrderController(OrderService orderService, NotificationService notificationService){
+        this.orderService = orderService;
+        this.notificationService = notificationService;
+    }
 
     @PostMapping
     public ResponseEntity<OrderEntity> createOrder(@RequestBody OrderEntity order, Principal principal){
@@ -75,17 +80,26 @@ public class OrderController {
         switch(status.toLowerCase()){
             case "approved":
                 o.setStatus("approved");
+                o.setApprovedAt(System.currentTimeMillis());
                 if(shipper != null) o.setShipper(shipper);
                 if(address != null) o.setShippingAddress(address);
                 break;
             case "cancelled":
                 o.setStatus("cancelled");
+                o.setApprovedAt(null);
                 if(cancelReason != null) o.setCancelReason(cancelReason);
                 break;
             default:
                 o.setStatus(status);
         }
         orderService.save(o);
+        // send notification to the order's device (if available)
+        try{
+            String message = "Đơn đã được xác nhận và sẽ được giao đến bạn trong thời gian sớm nhất";
+            String deviceId = o.getDeviceId();
+            notificationService.createNotification(o.getUser(), deviceId, message);
+        }catch(Exception ex){ /* log silently */ }
+
         return ResponseEntity.ok(o);
     }
 }

@@ -81,6 +81,7 @@
         order.shipper = ship.shipper
         order.address = ship.address
         order.status = 'approved'
+        order.approvedAt = Date.now()
         // call backend to update status
         try{
           const hdr = Object.assign({'Content-Type':'application/json'}, getAuthHeader())

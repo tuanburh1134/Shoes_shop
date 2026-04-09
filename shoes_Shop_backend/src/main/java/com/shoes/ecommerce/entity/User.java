@@ -31,6 +31,15 @@ public class User {
     @Column(name = "banned_forever")
     private Boolean bannedForever = false;
 
+    @Column(name = "google_account")
+    private Boolean googleAccount = false;
+
+    @Column(name = "two_factor_enabled")
+    private Boolean twoFactorEnabled = false;
+
+    @Column(name = "pin_hash")
+    private String pinHash;
+
     public User() {}
 
     public User(String username, String password, String email) {
@@ -65,4 +74,10 @@ public class User {
     public void setBannedUntil(Long bannedUntil) { this.bannedUntil = bannedUntil; }
     public Boolean getBannedForever() { return bannedForever; }
     public void setBannedForever(Boolean bannedForever) { this.bannedForever = bannedForever; }
+    public Boolean getGoogleAccount() { return googleAccount; }
+    public void setGoogleAccount(Boolean googleAccount) { this.googleAccount = googleAccount; }
+    public Boolean getTwoFactorEnabled() { return twoFactorEnabled; }
+    public void setTwoFactorEnabled(Boolean twoFactorEnabled) { this.twoFactorEnabled = twoFactorEnabled; }
+    public String getPinHash() { return pinHash; }
+    public void setPinHash(String pinHash) { this.pinHash = pinHash; }
 }

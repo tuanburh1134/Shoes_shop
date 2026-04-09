@@ -12,7 +12,9 @@
   <div class="d-flex admin-layout">
     <aside class="admin-sidebar p-4">
       <div class="mb-4 d-flex align-items-center">
-        <img src="../assets/logo.jpg" alt="logo" style="height:40px;border-radius:6px;margin-right:8px">
+        <a href="../index.html" aria-label="Về trang chủ">
+          <img src="../assets/logo.jpg" alt="logo" style="height:40px;border-radius:6px;margin-right:8px">
+        </a>
       </div>
       <ul class="list-unstyled">
         <li class="mb-2"><a href="dashboard.html" class="text-decoration-none"> <i class="fa fa-chart-line me-2"></i> Thống kê doanh thu</a></li>
@@ -27,7 +29,6 @@
     <main class="flex-fill p-4 admin-main">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h3>Quản lý hàng hóa</h3>
-        <a href="../index.html" class="btn btn-secondary">Về trang chủ</a>
       </div>
 
       <div class="row">
@@ -119,17 +120,6 @@
                   </div>
                 </div>
                 <div class="mb-2">
-                  <label class="form-label">Số lượng trong kho (mỗi cỡ)</label>
-                  <div class="row">
-                    <div class="col-4 col-sm-2 mb-1"><label>39</label><input id="qty-39" type="number" min="0" class="form-control"></div>
-                    <div class="col-4 col-sm-2 mb-1"><label>40</label><input id="qty-40" type="number" min="0" class="form-control"></div>
-                    <div class="col-4 col-sm-2 mb-1"><label>41</label><input id="qty-41" type="number" min="0" class="form-control"></div>
-                    <div class="col-4 col-sm-2 mb-1"><label>42</label><input id="qty-42" type="number" min="0" class="form-control"></div>
-                    <div class="col-4 col-sm-2 mb-1"><label>43</label><input id="qty-43" type="number" min="0" class="form-control"></div>
-                    <div class="col-4 col-sm-2 mb-1"><label>44</label><input id="qty-44" type="number" min="0" class="form-control"></div>
-                  </div>
-                </div>
-                <div class="mb-2">
                   <label class="form-label">Giá (VND)</label>
                   <input id="prod-price" type="text" class="form-control" required placeholder="Nhập giá (ví dụ: 1.000.000)">
                 </div>
@@ -176,6 +166,25 @@
             });
           }catch(e){console.warn(e)}
         })();
+
+        // keep color inventory blocks in sync with selected color checkboxes
+        (function(){
+          function syncColorBlocks(){
+            ['white','black','blue'].forEach(function(color){
+              var cb = document.getElementById('color-' + color);
+              var block = document.querySelector('.color-block[data-color="' + color + '"]');
+              if(!block) return;
+              block.style.display = (cb && cb.checked) ? '' : 'none';
+            });
+          }
+          document.addEventListener('DOMContentLoaded', function(){
+            ['white','black','blue'].forEach(function(color){
+              var cb = document.getElementById('color-' + color);
+              if(cb) cb.addEventListener('change', syncColorBlocks);
+            });
+            syncColorBlocks();
+          });
+        })();
       </script>
 
     </main>
@@ -185,7 +194,7 @@
   <script src="../js/utils.js?v=3"></script>
   <script src="../js/auth.js?v=3"></script>
   <script src="../js/notifications.js?v=4"></script>
-  <script src="../js/admin-manage-product.js?v=3"></script>
+  <script src="../js/admin-manage-product.js?v=4"></script>
   <script src="../js/footer-contact.js?v=4"></script>
 </body>
 </html>

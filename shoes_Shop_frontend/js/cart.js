@@ -103,6 +103,43 @@
         }catch(e){ console.debug('Add order notifications failed', e); }
     }
 
+    async function requireTwoFactorForCheckout(){
+        const cur = (function(){
+            try{ return JSON.parse(localStorage.getItem('currentUser')||'null')||null }catch(e){ return null }
+        })();
+        if(!cur || !cur.username) return true;
+
+        try{
+            const statusRes = await axios.post(BACKEND + '/api/auth/2fa/status', { username: cur.username });
+            const enabled = !!(statusRes && statusRes.data && statusRes.data.enabled);
+            if(!enabled) return true;
+
+            const pin = prompt('Tài khoản đã bật xác thực 2 lớp. Vui lòng nhập mã PIN 6 số để thanh toán:');
+            if(pin == null) return false;
+            const pinText = String(pin).trim();
+            if(!/^\d{6}$/.test(pinText)){
+                if(window.showNotification) window.showNotification('Mã PIN không hợp lệ','PIN phải gồm đúng 6 số','error',2200);
+                else alert('PIN phải gồm đúng 6 số');
+                return false;
+            }
+
+            await axios.post(BACKEND + '/api/auth/2fa/verify', { username: cur.username, pin: pinText });
+            return true;
+        }catch(err){
+            const msg = (function(){
+                try{ return err && err.response && err.response.data && err.response.data.message ? err.response.data.message : '' }catch(e){ return '' }
+            })();
+            if(String(msg).toLowerCase().indexOf('pin.invalid') >= 0){
+                if(window.showNotification) window.showNotification('Mã PIN không đúng','Vui lòng thử lại','error',2200);
+                else alert('Mã PIN không đúng');
+                return false;
+            }
+            if(window.showNotification) window.showNotification('Không thể xác thực 2 lớp','Vui lòng thử lại','error',2200);
+            else alert('Không thể xác thực 2 lớp');
+            return false;
+        }
+    }
+
     // render cart page if present
     function renderCartPage(){
         const el = document.getElementById('cart-items');
@@ -205,6 +242,8 @@
             try{
                 const payload = await showCheckoutModal(cartNow, total)
                 if(!payload) return
+                const twoFactorOk = await requireTwoFactorForCheckout()
+                if(!twoFactorOk) return
                 // payload: { address, phone, method, discount }
                 if(payload.method === 'cash'){
                     // attempt server-side checkout first (will decrement inventory)

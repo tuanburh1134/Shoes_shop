@@ -24,6 +24,9 @@ public class OrderEntity {
 	// epoch millis
 	private Long createdAt;
 
+	// epoch millis when admin approves order
+	private Long approvedAt;
+
 	@Column(length = 1000)
 	private String shippingAddress;
 
@@ -37,6 +40,8 @@ public class OrderEntity {
 	private String cancelReason;
 
 	private Double total;
+	// optional device identifier provided by client when creating order
+	private String deviceId;
 
 	public OrderEntity() {}
 
@@ -54,6 +59,8 @@ public class OrderEntity {
 
 	public Long getCreatedAt() { return createdAt; }
 	public void setCreatedAt(Long createdAt) { this.createdAt = createdAt; }
+	public Long getApprovedAt() { return approvedAt; }
+	public void setApprovedAt(Long approvedAt) { this.approvedAt = approvedAt; }
 
 	public String getShippingAddress() { return shippingAddress; }
 	public void setShippingAddress(String shippingAddress) { this.shippingAddress = shippingAddress; }
@@ -77,5 +84,8 @@ public class OrderEntity {
 
 	public Double getTotal() { return total; }
 	public void setTotal(Double total) { this.total = total; }
+
+	public String getDeviceId() { return deviceId; }
+	public void setDeviceId(String deviceId) { this.deviceId = deviceId; }
 }
 
