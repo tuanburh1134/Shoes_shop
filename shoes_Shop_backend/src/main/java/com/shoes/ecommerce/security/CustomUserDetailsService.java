@@ -23,6 +23,12 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User u = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
         GrantedAuthority auth = new SimpleGrantedAuthority("ROLE_" + (u.getRole() == null ? "USER" : u.getRole().toUpperCase()));
-        return new org.springframework.security.core.userdetails.User(u.getUsername(), u.getPassword(), Collections.singletonList(auth));
+        boolean isLocked = Boolean.TRUE.equals(u.getBannedForever()) || (u.getBannedUntil() != null && u.getBannedUntil() > System.currentTimeMillis());
+        return org.springframework.security.core.userdetails.User
+                .withUsername(u.getUsername())
+                .password(u.getPassword())
+                .authorities(Collections.singletonList(auth))
+                .accountLocked(isLocked)
+                .build();
     }
 }

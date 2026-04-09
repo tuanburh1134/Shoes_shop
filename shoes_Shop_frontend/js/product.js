@@ -1,26 +1,49 @@
-const BACKEND = 'http://localhost:8081';
+const BACKEND = 'http://localhost:8080';
 const API_URL = BACKEND + "/api/products";
+function escapeHtml(s){ return String(s||'').replace(/[&"'<>]/g, function(m){ return ({'&':'&amp;','"':'&quot;',"'":"&#39;",'<':'&lt;','>':'&gt;'})[m] }) }
+let CURRENT_BRAND_FILTER = null;
 
-function sampleProducts(){
-    return [
-        {id:1,name:'Giày Nike Dunk Low Retro Nam - Trắng Xanh',description:'Classic silhouette',price:'2.890.000đ',oldPrice:'3.550.000đ',img:'https://i.imgur.com/1Q9Z1Z2.png',badges:['SIÊU SALE','HÀNG MỚI VỀ'],rating:5},
-        {id:2,name:'Giày Nike Air Jordan 1 Low Nam - Đen Đỏ',description:'Iconic Jordan',price:'3.390.000đ',oldPrice:'3.900.000đ',img:'https://i.imgur.com/2cOaJ.png',badges:['HOT'],rating:5},
-        {id:3,name:'Giày adidas VL Court Base Nam - Xám Nâu',description:'Casual sneaker',price:'1.290.000đ',oldPrice:'1.600.000đ',img:'https://i.imgur.com/3bKQ.png',badges:['HÀNG MỚI VỀ'],rating:5},
-        {id:4,name:'Giày Asics Runner - Navy',description:'Performance running',price:'2.790.000đ',oldPrice:'3.150.000đ',img:'https://i.imgur.com/4fPq.png',badges:[],rating:5},
-        {id:5,name:'Giày Nike Court Vision Low Nữ - Panda',description:'Everyday comfort',price:'1.990.000đ',oldPrice:'2.300.000đ',img:'https://i.imgur.com/5gHk.png',badges:[],rating:5}
-    ];
-}
+// Removed sampleProducts() to avoid shipping demo data in production.
 
 let ALL_PRODUCTS = [];
 const ITEMS_PER_ROW = 3;
 const ROWS_PER_PAGE = 15; // as requested
 const PAGE_SIZE = ITEMS_PER_ROW * ROWS_PER_PAGE; // 45 items per page
 let currentPage = 1;
+// advanced filter state
+let ADV_FILTER = { brand: null, min: null, max: null, size: null, hasDiscount: false };
+let SEARCH_QUERY = '';
+
+function computeHotProducts(){
+        const ordersKey = 'orders_v1';
+        let counts = {};
+        try{
+                const orders = JSON.parse(localStorage.getItem(ordersKey)||'[]') || [];
+                orders.forEach(o=>{
+                        (o.items||[]).forEach(it=>{
+                                const pid = it.productId || it.id;
+                                if(!pid) return;
+                                const qty = parseInt(it.qty||1,10)||1;
+                                counts[pid] = (counts[pid]||0) + qty;
+                        })
+                })
+        }catch(e){ counts = {}; }
+        const ranked = Object.entries(counts).sort((a,b)=> b[1]-a[1]).slice(0,5).map(([id])=>String(id));
+        return { hotIds: new Set(ranked), counts };
+}
+
+function addBadge(list, badge){
+        if(!list) list = [];
+        if(!list.includes(badge)) list.push(badge);
+        return list;
+}
 
 async function loadProducts() {
         const container = document.getElementById("product-list");
         if(!container) return;
         container.innerHTML = "";
+
+        const { hotIds, counts } = computeHotProducts();
 
         try{
                 const response = await axios.get(API_URL);
@@ -39,12 +62,24 @@ async function loadProducts() {
                         qty41: p.qty41 || 0,
                         qty42: p.qty42 || 0,
                         qty43: p.qty43 || 0,
-                        qty44: p.qty44 || 0
+                        qty44: p.qty44 || 0,
+                        purchaseCount: counts[p.id] || 0
                 }));
         }catch(e){
-                // fallback demo products
-                ALL_PRODUCTS = sampleProducts();
+                // If backend not available, do not populate with demo/sample products.
+                ALL_PRODUCTS = [];
+                console.warn('Failed to load products from API; no sample products will be used.', e);
         }
+
+        // tag hot and sort to top
+        ALL_PRODUCTS = ALL_PRODUCTS.map(p=>{
+                if(hotIds.has(String(p.id))) p.badges = addBadge(p.badges||[], 'HOT');
+                return p;
+        }).sort((a,b)=>{
+                const ah = hotIds.has(String(a.id)), bh = hotIds.has(String(b.id));
+                if(ah !== bh) return ah? -1 : 1;
+                return (b.purchaseCount||0) - (a.purchaseCount||0);
+        });
 
         renderPage(currentPage);
         renderPagination();
@@ -91,6 +126,14 @@ function renderCategories(){
 
         container.innerHTML = '';
 
+        // add "Tất cả" button to clear brand filter
+        const allEl = document.createElement('div');
+        allEl.className = 'category-item all-item' + (CURRENT_BRAND_FILTER? '' : ' active');
+        allEl.setAttribute('data-brand', '');
+        allEl.textContent = 'Tất cả';
+        container.appendChild(allEl);
+
+
         merged.forEach(item => {
                 const b = item.brand;
                 const label = item.label;
@@ -110,19 +153,133 @@ function renderCategories(){
                 container.appendChild(el);
         });
 
-        // add spacer and % SALE to right
-        const right = document.createElement('div'); right.className = 'category-item text-danger ms-auto'; right.textContent = '% SALE';
-        container.appendChild(right);
+        // actions area (right aligned) - filter button
+        const actions = document.createElement('div');
+        actions.className = 'categories-actions';
+        actions.innerHTML = `<button id="open-filter-btn" class="btn btn-sm btn-outline-secondary">Lọc ▾</button>`;
+        container.appendChild(actions);
+
+        // attach click handlers to filter by brand
+        const cats = container.querySelectorAll('.category-item[data-brand]');
+        cats.forEach(c=>{
+                c.addEventListener('click', function(){
+                        const b = this.getAttribute('data-brand') || '';
+                        // toggle filter: clicking same brand clears filter
+                        if(!b) { CURRENT_BRAND_FILTER = null; } else { if(CURRENT_BRAND_FILTER === b) CURRENT_BRAND_FILTER = null; else CURRENT_BRAND_FILTER = b; }
+                        // highlight selected
+                        cats.forEach(x=> x.classList.toggle('active', (CURRENT_BRAND_FILTER? x.getAttribute('data-brand') === CURRENT_BRAND_FILTER : x.getAttribute('data-brand')==='' )));
+                        // also update filter select if open
+                        const sel = document.getElementById('filter-brand'); if(sel) sel.value = CURRENT_BRAND_FILTER || '';
+                        // reset to page 1
+                        currentPage = 1;
+                        renderPage(currentPage);
+                        renderPagination();
+                })
+        });
+
+        // open filter panel when clicking button
+        const filterBtn = document.getElementById('open-filter-btn');
+        if(filterBtn){ filterBtn.addEventListener('click', ()=>{ toggleFilterPanel(); }); }
+
+        // ensure clicking "Tất cả" clears brand filter
+        allEl.addEventListener('click', function(){ CURRENT_BRAND_FILTER = null; cats.forEach(x=> x.classList.toggle('active', x.getAttribute('data-brand')==='' )); const sel = document.getElementById('filter-brand'); if(sel) sel.value = ''; currentPage = 1; renderPage(currentPage); renderPagination(); });
+
+        // do not add extra right-side SALE label (removed per UI request)
+}
+
+// -- Filter panel UI and logic --
+function toggleFilterPanel(){
+        let panel = document.querySelector('.filter-panel');
+        if(panel && panel.style.display === 'block'){ panel.style.display = 'none'; return; }
+        if(!panel){
+                panel = document.createElement('div');
+                panel.className = 'filter-panel shadow';
+                panel.innerHTML = `
+                        <div class="filter-head d-flex justify-content-between align-items-center p-2 border-bottom"><strong>Bộ lọc nâng cao</strong><button id="filter-close" class="btn btn-sm btn-light">×</button></div>
+                        <div class="p-3">
+                                <div class="mb-2"><label class="form-label">Hãng</label><select id="filter-brand" class="form-select"><option value="">Tất cả</option></select></div>
+                                <div class="mb-2"><label class="form-label">Giá (VNĐ)</label><div class="d-flex gap-2"><input id="filter-min" type="text" class="form-control" placeholder="từ"/><input id="filter-max" type="text" class="form-control" placeholder="đến"/></div></div>
+                                <div class="mb-2"><label class="form-label">Cỡ giày</label><select id="filter-size" class="form-select"><option value="">Tất cả</option><option>39</option><option>40</option><option>41</option><option>42</option><option>43</option><option>44</option></select></div>
+                                <div class="form-check mb-3"><input id="filter-discount" class="form-check-input" type="checkbox"><label class="form-check-label">Chỉ hiển thị đang giảm giá</label></div>
+                                <div class="d-flex gap-2"><button id="apply-filter" class="btn btn-primary flex-fill">Áp dụng</button><button id="reset-filter" class="btn btn-outline-secondary flex-fill">Đặt lại</button></div>
+                        </div>
+                `;
+                document.body.appendChild(panel);
+
+                // populate brand select with merged brands
+                const sel = panel.querySelector('#filter-brand');
+                const brands = Array.from(new Set(ALL_PRODUCTS.map(p=> (p.brand||'').trim()).filter(b=>b))).sort();
+                brands.forEach(b=>{ const opt = document.createElement('option'); opt.value = b; opt.textContent = b; sel.appendChild(opt); });
+
+                panel.querySelector('#filter-close').addEventListener('click', ()=>{ panel.style.display='none'; });
+                panel.querySelector('#apply-filter').addEventListener('click', ()=>{
+                        ADV_FILTER.brand = panel.querySelector('#filter-brand').value || null;
+                        ADV_FILTER.min = panel.querySelector('#filter-min').value ? parseInt(String(panel.querySelector('#filter-min').value).replace(/[^0-9]/g,''),10) : null;
+                        ADV_FILTER.max = panel.querySelector('#filter-max').value ? parseInt(String(panel.querySelector('#filter-max').value).replace(/[^0-9]/g,''),10) : null;
+                        ADV_FILTER.size = panel.querySelector('#filter-size').value || null;
+                        ADV_FILTER.hasDiscount = !!panel.querySelector('#filter-discount').checked;
+                        // sync brand category selection
+                        if(ADV_FILTER.brand){ CURRENT_BRAND_FILTER = ADV_FILTER.brand; }
+                        else { CURRENT_BRAND_FILTER = null; }
+                        // update category active states
+                        const cats = document.querySelectorAll('.categories-nav .container .category-item');
+                        cats.forEach(x=> x.classList.toggle('active', (CURRENT_BRAND_FILTER? x.getAttribute('data-brand')===CURRENT_BRAND_FILTER : x.getAttribute('data-brand')==='')));
+                        panel.style.display='none';
+                        currentPage = 1; renderPage(currentPage); renderPagination();
+                });
+                panel.querySelector('#reset-filter').addEventListener('click', ()=>{
+                        panel.querySelector('#filter-brand').value = '';
+                        panel.querySelector('#filter-min').value = '';
+                        panel.querySelector('#filter-max').value = '';
+                        panel.querySelector('#filter-size').value = '';
+                        panel.querySelector('#filter-discount').checked = false;
+                        ADV_FILTER = { brand: null, min: null, max: null, size: null, hasDiscount: false };
+                        CURRENT_BRAND_FILTER = null;
+                        const cats = document.querySelectorAll('.categories-nav .container .category-item');
+                        cats.forEach(x=> x.classList.toggle('active', x.getAttribute('data-brand')===''));
+                        panel.style.display='none';
+                        currentPage = 1; renderPage(currentPage); renderPagination();
+                });
+                // add formatting for min/max inputs
+                const minIn = panel.querySelector('#filter-min');
+                const maxIn = panel.querySelector('#filter-max');
+                [minIn, maxIn].forEach(inp=>{
+                        if(!inp) return;
+                        inp.addEventListener('input', function(){ const d = String(this.value).replace(/[^0-9]/g,''); this.value = d? (window.formatNumber? formatNumber(d) : d) : '' });
+                        inp.addEventListener('focus', function(){ this.value = String(this.value).replace(/[^0-9]/g,'') });
+                        inp.addEventListener('blur', function(){ if(this.value) this.value = (window.formatNumber? formatNumber(this.value): this.value) });
+                });
+        }
+        // position and show
+        panel.style.display = 'block';
+        panel.style.right = '16px';
+        panel.style.top = '64px';
+}
+
+function productMatchesAdvancedFilters(p){
+        // brand handled separately via CURRENT_BRAND_FILTER
+        const price = parseInt(String(p.price||'').replace(/[^0-9]/g,''),10) || 0;
+        if(ADV_FILTER.min != null && price < ADV_FILTER.min) return false;
+        if(ADV_FILTER.max != null && price > ADV_FILTER.max) return false;
+        if(ADV_FILTER.size){
+                const sizeKey = 'qty' + ADV_FILTER.size;
+                if(!(p[sizeKey] && p[sizeKey] > 0)) return false;
+        }
+        if(ADV_FILTER.hasDiscount){
+                const hasDisc = !!(p.oldPrice || p.discount || (p.badges && p.badges.includes && p.badges.some(b=>/sale|sale/i.test(b))));
+                if(!hasDisc) return false;
+        }
+        return true;
 }
 
 function renderProductCard(product){
                 const badgesHtml = (product.badges||[]).map(b=>`<div class="badge-custom">${b}</div>`).join('');
         const ratingStars = Array.from({length: product.rating||0}).map(()=>'<i class="fa fa-star"></i>').join('');
         return `
-                <div class="product-item">
-                    <div class="product-card position-relative">
+                                <div class="product-item">
+                                        <div class="product-card position-relative" style="cursor:pointer" onclick="window.location.href='product-detail.html?id=${product.id}'">
                                                 <div class="badges">${badgesHtml}</div>
-                                        <div class="media"><img src="${(product.img && product.img.startsWith && product.img.startsWith('/') ? BACKEND+product.img : product.img)||'https://via.placeholder.com/240x140?text=Product'}" alt="${product.name}" style="cursor:pointer" onclick="(function(){window.open('${(product.detailImage && product.detailImage.startsWith && product.detailImage.startsWith('/') ? BACKEND+product.detailImage : product.detailImage)||product.img}','_blank')})()"></div>
+                                                                                <div class="media"><img src="${(product.img && product.img.startsWith && product.img.startsWith('/') ? BACKEND+product.img : product.img)||'https://via.placeholder.com/240x140?text=Product'}" alt="${product.name}"></div>
                                         ${((product.qty39||0)+(product.qty40||0)+(product.qty41||0)+(product.qty42||0)+(product.qty43||0)+(product.qty44||0))<=0?'<div class="badge-custom out-of-stock">Hết hàng</div>':''}
                         <div class="body">
                                                         <div class="mb-1" style="font-size:13px;color:#777">${product.brand||''}</div>
@@ -130,8 +287,11 @@ function renderProductCard(product){
                             <div class="rating">${ratingStars}</div>
                             <div class="meta">${product.description||''}</div>
                             <div class="mt-auto">
-                                <span class="price">${product.price}</span>
-                                ${product.oldPrice?`<span class="old-price">${product.oldPrice}</span>`:''}
+                                                        <span class="price">${formatVND(product.price)}</span>
+                                                        ${product.oldPrice?`<span class="old-price">${formatVND(product.oldPrice)}</span>`:''}
+                                                                <div class="mt-2 d-flex gap-2">
+                                                                        <button class="btn btn-sm btn-outline-primary btn-add-list" data-id="${product.id}">Thêm vào giỏ</button>
+                                                                </div>
                             </div>
                         </div>
                     </div>
@@ -139,13 +299,86 @@ function renderProductCard(product){
         `;
 }
 
+// attach delegated event for add buttons (handles dynamic content)
+document.addEventListener('click', function(e){
+        const btn = e.target.closest && e.target.closest('.btn-add-list');
+        if(!btn) return;
+        e.stopPropagation(); // prevent navigating to detail
+        const id = btn.getAttribute('data-id');
+        const product = ALL_PRODUCTS.find(p=>String(p.id)===String(id));
+        if(!product) return;
+                // open quick size selector modal before adding
+                const imgEl = btn.closest('.product-card').querySelector('.media img');
+                const imgUrl = imgEl && imgEl.src ? imgEl.src : (product.img || '');
+                showQuickSizeModal(product, imgUrl, function(selected){
+                        if(!selected) return;
+                        const item = { id: product.id, name: product.name, price: parsePrice(product.price), img: imgUrl, size: selected.size || '', qty: selected.qty || 1 };
+                        if(window.cart && typeof window.cart.add === 'function') window.cart.add(item);
+                        else {
+                                const raw = localStorage.getItem('cart_items_v1');
+                                let list = raw ? JSON.parse(raw) : [];
+                                const idx = list.findIndex(c=>String(c.id)===String(item.id) && String(c.size||'')===String(item.size||''));
+                                if(idx>=0) list[idx].qty = (list[idx].qty||0) + item.qty; else list.push(item);
+                                localStorage.setItem('cart_items_v1', JSON.stringify(list));
+                                localStorage.setItem('cartUpdatedAt', String(Date.now()));
+                        }
+                        // animate
+                        animateImageToCart(imgEl);
+                        window.showNotification && window.showNotification('Đã thêm vào giỏ', product.name || '', 'success', 1200);
+                })
+});
+
+function animateImageToCart(imgEl){
+        if(!imgEl) return;
+        const cartAnchor = document.querySelector('a[href="cart.html"]');
+        const cartRect = cartAnchor ? cartAnchor.getBoundingClientRect() : null;
+        const imgRect = imgEl.getBoundingClientRect();
+
+        const clone = imgEl.cloneNode(true);
+        clone.style.position = 'fixed';
+        clone.style.left = imgRect.left + 'px';
+        clone.style.top = imgRect.top + 'px';
+        clone.style.width = imgRect.width + 'px';
+        clone.style.height = imgRect.height + 'px';
+        clone.style.transition = 'transform 700ms cubic-bezier(.2,.8,.2,1), opacity 700ms';
+        clone.style.zIndex = 9999;
+        clone.style.pointerEvents = 'none';
+        clone.style.objectFit = 'contain';
+        document.body.appendChild(clone);
+
+        let destX = window.innerWidth - 40, destY = 20;
+        if(cartRect){
+                destX = cartRect.left + cartRect.width/2;
+                destY = cartRect.top + cartRect.height/2;
+        }
+
+        const deltaX = destX - (imgRect.left + imgRect.width/2);
+        const deltaY = destY - (imgRect.top + imgRect.height/2);
+
+        requestAnimationFrame(()=>{
+                clone.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.14) rotate(8deg)`;
+                clone.style.opacity = '0.95';
+        });
+
+        clone.addEventListener('transitionend', ()=>{ clone.remove(); const badge = document.querySelector('.cart-badge'); if(badge){ badge.animate([{transform:'scale(1)'},{transform:'scale(1.25)'},{transform:'scale(1)'}],{duration:300}); } }, { once:true });
+}
+
 function renderPage(page){
         const container = document.getElementById("product-list");
         if(!container) return;
         container.innerHTML = "";
+        // apply brand filter if present
+        let filtered = CURRENT_BRAND_FILTER ? ALL_PRODUCTS.filter(p=> (p.brand||'').toLowerCase() === String(CURRENT_BRAND_FILTER).toLowerCase()) : ALL_PRODUCTS.slice();
+        // apply search by name
+        if(SEARCH_QUERY){
+                const q = SEARCH_QUERY.toLowerCase();
+                filtered = filtered.filter(p=> (p.name||'').toLowerCase().includes(q));
+        }
+        // apply advanced filters
+        filtered = filtered.filter(p => productMatchesAdvancedFilters(p));
         const start = (page - 1) * PAGE_SIZE;
         const end = start + PAGE_SIZE;
-        const pageItems = ALL_PRODUCTS.slice(start, end);
+        const pageItems = filtered.slice(start, end);
         pageItems.forEach(p => container.innerHTML += renderProductCard(p));
 }
 
@@ -153,7 +386,13 @@ function renderPagination(){
         const pag = document.getElementById('pagination');
         if(!pag) return;
         pag.innerHTML = '';
-        const total = ALL_PRODUCTS.length;
+        // total should reflect any active brand filter
+        let filtered = CURRENT_BRAND_FILTER ? ALL_PRODUCTS.filter(p=> (p.brand||'').toLowerCase() === String(CURRENT_BRAND_FILTER).toLowerCase()) : ALL_PRODUCTS;
+        if(SEARCH_QUERY){
+                const q = SEARCH_QUERY.toLowerCase();
+                filtered = filtered.filter(p=> (p.name||'').toLowerCase().includes(q));
+        }
+        const total = filtered.length;
         const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
         function btn(label, disabled, dataPage){
@@ -184,7 +423,44 @@ function renderPagination(){
         pag.appendChild(btn('Next ›', currentPage>=totalPages, currentPage+1));
 }
 
+function initSearch(){
+        const form = document.querySelector('.search-wrap form');
+        const input = document.querySelector('.search-wrap .search-input');
+        if(!form || !input) return;
+        form.addEventListener('submit', function(e){
+                e.preventDefault();
+                SEARCH_QUERY = (input.value||'').trim();
+                currentPage = 1;
+                renderPage(currentPage);
+                renderPagination();
+        });
+}
+
+initSearch();
 loadProducts();
+
+// quick size modal used when adding from product list
+function showQuickSizeModal(product, imgUrl, cb){
+                try{
+                                const sizes = ['39','40','41','42','43','44'];
+                                const modal = document.createElement('div'); modal.className='modal fade'; modal.tabIndex=-1;
+                                modal.innerHTML = `
+                                                <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+                                                        <div class="modal-header"><h5 class="modal-title">Chọn cỡ - ${escapeHtml(product.name||'')}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                                                        <div class="modal-body">
+                                                                <div class="mb-2"><label class="form-label">Cỡ</label><div id="quick-sizes" class="d-flex gap-2 flex-wrap"></div></div>
+                                                                <div class="mb-2"><label class="form-label">Số lượng</label><input id="quick-qty" type="number" min="1" value="1" class="form-control"/></div>
+                                                        </div>
+                                                        <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button><button id="quick-add" class="btn btn-primary">Thêm vào giỏ</button></div>
+                                                </div></div>`;
+                                document.body.appendChild(modal);
+                                const bs = new bootstrap.Modal(modal); bs.show();
+                                const sizesContainer = modal.querySelector('#quick-sizes');
+                                sizes.forEach(s=>{ const b = document.createElement('button'); b.className='btn btn-outline-secondary'; b.textContent=s; b.dataset.size=s; b.addEventListener('click', ()=>{ sizesContainer.querySelectorAll('button').forEach(x=>x.classList.remove('btn-primary')); b.classList.add('btn-primary'); }); sizesContainer.appendChild(b); });
+                                modal.querySelector('#quick-add').addEventListener('click', function(){ const sel = modal.querySelector('#quick-sizes button.btn-primary'); const size = sel ? sel.dataset.size : ''; const qty = parseInt(modal.querySelector('#quick-qty').value,10) || 1; if(!size){ if(window.showNotification) window.showNotification('Vui lòng chọn cỡ giày','error'); return } bs.hide(); cb({ size:size, qty: qty }); });
+                                modal.addEventListener('hidden.bs.modal', function(){ try{ modal.parentNode && modal.parentNode.removeChild(modal) }catch(e){} });
+                }catch(e){ console.warn('quick size modal failed', e); cb(null) }
+}
 
 // Reload products when another tab/page signals an update
 window.addEventListener('storage', function(e){
