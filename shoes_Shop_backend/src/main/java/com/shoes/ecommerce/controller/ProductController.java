@@ -20,14 +20,10 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
-import java.io.File;
 import java.io.IOException;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.http.HttpStatus;
-import org.springframework.util.StringUtils;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
+import java.util.Base64;
 
 @RestController
 @RequestMapping("/api/products")
@@ -101,20 +97,12 @@ public class ProductController {
         dto.setQty44(qty44);
 
         try {
-            String uploadDir = System.getProperty("user.dir") + File.separator + "uploads" + File.separator;
-            Files.createDirectories(Path.of(uploadDir));
             if (image != null && !image.isEmpty()) {
-                String filename = System.currentTimeMillis() + "_" + StringUtils.cleanPath(image.getOriginalFilename());
-                Path target = Path.of(uploadDir).resolve(filename);
-                Files.copy(image.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-                dto.setImage("/uploads/" + filename);
+                dto.setImage(toDataUrl(image));
             }
             // single detailImage (backward compatible)
             if (detailImage != null && !detailImage.isEmpty()) {
-                String filename = System.currentTimeMillis() + "_det_" + StringUtils.cleanPath(detailImage.getOriginalFilename());
-                Path target = Path.of(uploadDir).resolve(filename);
-                Files.copy(detailImage.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-                dto.setDetailImage("/uploads/" + filename);
+                dto.setDetailImage(toDataUrl(detailImage));
             }
             // multiple detail images
             if (detailImages != null && detailImages.length > 0) {
@@ -123,17 +111,14 @@ public class ProductController {
                 for (MultipartFile f : detailImages) {
                     if (f == null || f.isEmpty()) continue;
                     if (count >= 10) break; // limit to 10
-                    String filename = System.currentTimeMillis() + "_det_" + count + "_" + StringUtils.cleanPath(f.getOriginalFilename());
-                    Path target = Path.of(uploadDir).resolve(filename);
-                    Files.copy(f.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-                    saved.add("/uploads/" + filename);
+                    saved.add(toDataUrl(f));
                     count++;
                 }
                 dto.setDetailImages(saved);
             }
             if(inventory != null) dto.setInventory(inventory);
         } catch (IOException ex) {
-            logger.error("Failed to save uploaded files", ex);
+            logger.error("Failed to process uploaded files", ex);
             return ResponseEntity.status(500).build();
         }
 
@@ -191,19 +176,11 @@ public class ProductController {
         dto.setQty44(qty44);
 
         try {
-            String uploadDir = System.getProperty("user.dir") + File.separator + "uploads" + File.separator;
-            Files.createDirectories(Path.of(uploadDir));
             if (image != null && !image.isEmpty()) {
-                String filename = System.currentTimeMillis() + "_" + StringUtils.cleanPath(image.getOriginalFilename());
-                Path target = Path.of(uploadDir).resolve(filename);
-                Files.copy(image.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-                dto.setImage("/uploads/" + filename);
+                dto.setImage(toDataUrl(image));
             }
             if (detailImage != null && !detailImage.isEmpty()) {
-                String filename = System.currentTimeMillis() + "_det_" + StringUtils.cleanPath(detailImage.getOriginalFilename());
-                Path target = Path.of(uploadDir).resolve(filename);
-                Files.copy(detailImage.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-                dto.setDetailImage("/uploads/" + filename);
+                dto.setDetailImage(toDataUrl(detailImage));
             }
             if (detailImages != null && detailImages.length > 0) {
                 java.util.List<String> saved = new java.util.ArrayList<>();
@@ -211,17 +188,14 @@ public class ProductController {
                 for (MultipartFile f : detailImages) {
                     if (f == null || f.isEmpty()) continue;
                     if (count >= 10) break;
-                    String filename = System.currentTimeMillis() + "_det_" + count + "_" + StringUtils.cleanPath(f.getOriginalFilename());
-                    Path target = Path.of(uploadDir).resolve(filename);
-                    Files.copy(f.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-                    saved.add("/uploads/" + filename);
+                    saved.add(toDataUrl(f));
                     count++;
                 }
                 dto.setDetailImages(saved);
             }
             if(inventory != null) dto.setInventory(inventory);
         } catch (IOException ex) {
-            logger.error("Failed to save uploaded files", ex);
+            logger.error("Failed to process uploaded files", ex);
             return ResponseEntity.status(500).build();
         }
 
@@ -236,5 +210,14 @@ public class ProductController {
         boolean ok = productService.delete(id);
         if (!ok) return ResponseEntity.notFound().build();
         return ResponseEntity.noContent().build();
+    }
+
+    private String toDataUrl(MultipartFile file) throws IOException {
+        String contentType = file.getContentType();
+        if (contentType == null || contentType.isBlank()) {
+            contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
+        }
+        String base64 = Base64.getEncoder().encodeToString(file.getBytes());
+        return "data:" + contentType + ";base64," + base64;
     }
 }

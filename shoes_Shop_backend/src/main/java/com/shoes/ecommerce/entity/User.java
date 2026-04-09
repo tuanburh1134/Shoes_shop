@@ -19,7 +19,8 @@ public class User {
     private String email;
     @Column(columnDefinition = "TEXT")
     private String addresses; // JSON array string of addresses
-    @Column(name = "avatar_url")
+    @Lob
+    @Column(name = "avatar_url", columnDefinition = "LONGTEXT")
     private String avatarUrl;
     
     @Column(nullable = false)

@@ -24,13 +24,16 @@ public class Product {
     @Column(length = 100)
     private String brand;
 
-    @Column(length = 255)
+    @Lob
+    @Column(columnDefinition = "LONGTEXT")
     private String image;
 
-    @Column(name = "detail_image", length = 255)
+    @Lob
+    @Column(name = "detail_image", columnDefinition = "LONGTEXT")
     private String detailImage;
 
-    @Column(name = "detail_images", columnDefinition = "TEXT")
+    @Lob
+    @Column(name = "detail_images", columnDefinition = "LONGTEXT")
     private String detailImages; // JSON array string of detail image URLs
 
     @Column(name = "inventory", columnDefinition = "TEXT")
