@@ -1,4 +1,50 @@
 (function () {
+  function getHomeUrl() {
+    try {
+      var p = String(window.location.pathname || '').replace(/\\/g, '/').toLowerCase();
+      return p.indexOf('/admin/') >= 0 ? '../index.html' : 'index.html';
+    } catch (e) {
+      return 'index.html';
+    }
+  }
+
+  function bindLogoHome() {
+    try {
+      var logo = document.getElementById('site-logo');
+      if (!logo) return;
+      logo.style.cursor = 'pointer';
+      if (logo.dataset.homeBound === '1') return;
+      logo.dataset.homeBound = '1';
+      logo.addEventListener('click', function (e) {
+        e.preventDefault();
+        window.location.href = getHomeUrl();
+      });
+    } catch (e) {}
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindLogoHome);
+  } else {
+    bindLogoHome();
+  }
+
+  function applySavedTheme() {
+    try {
+      var isDark = localStorage.getItem('ui_dark_mode') === '1';
+      document.body.classList.toggle('app-dark', isDark);
+    } catch (e) {}
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applySavedTheme);
+  } else {
+    applySavedTheme();
+  }
+
+  window.addEventListener('storage', function (e) {
+    if (e.key === 'ui_dark_mode') applySavedTheme();
+  });
+
   function injectFooter() {
     if (document.getElementById('global-contact-footer')) return;
 

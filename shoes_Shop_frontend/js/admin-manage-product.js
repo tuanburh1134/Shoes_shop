@@ -22,12 +22,40 @@
     }
   }
 
+  function getProductTotalStock(product){
+    if(!product) return 0
+    let total = 0
+
+    try{
+      const inv = typeof product.inventory === 'string' ? JSON.parse(product.inventory) : product.inventory
+      if(inv && typeof inv === 'object'){
+        Object.keys(inv).forEach(color=>{
+          const colorMap = inv[color]
+          if(!colorMap || typeof colorMap !== 'object') return
+          Object.keys(colorMap).forEach(size=>{
+            total += parseInt(colorMap[size] || 0, 10) || 0
+          })
+        })
+      }
+    }catch(e){ /* ignore inventory parse errors and fallback below */ }
+
+    if(total > 0) return total
+
+    return (parseInt(product.qty39 || 0, 10) || 0)
+      + (parseInt(product.qty40 || 0, 10) || 0)
+      + (parseInt(product.qty41 || 0, 10) || 0)
+      + (parseInt(product.qty42 || 0, 10) || 0)
+      + (parseInt(product.qty43 || 0, 10) || 0)
+      + (parseInt(product.qty44 || 0, 10) || 0)
+  }
+
   function renderList(filter){
     const container = $('#admin-product-list')
     if(!container) return
     container.innerHTML = ''
     const items = (PRODUCTS || []).filter(p => !filter || (p.name || '').toLowerCase().indexOf(filter.toLowerCase()) !== -1)
     items.forEach(p => {
+      const totalStock = getProductTotalStock(p)
       const el = document.createElement('div')
       el.className = 'list-group-item d-flex justify-content-between align-items-start'
       el.innerHTML = `
@@ -36,6 +64,7 @@
           <div class="text-muted">${p.description}</div>
           <div class="text-muted">Hãng: ${p.brand || ''}</div>
           <div><strong>${(window.formatVND ? formatVND(p.price) : (p.price + ' VND'))}</strong> ${p.discount?`<span class="text-success">(-${p.discount}% )</span>`:''}</div>
+          <div class="text-muted">Tồn kho còn lại: <strong>${totalStock}</strong></div>
         </div>
         <div>
           <button class="btn btn-sm btn-primary me-1 edit-btn" data-id="${p.id}">Sửa</button>
@@ -47,6 +76,15 @@
     // attach handlers
     document.querySelectorAll('.edit-btn').forEach(b=>b.addEventListener('click', onEdit))
     document.querySelectorAll('.del-btn').forEach(b=>b.addEventListener('click', onDelete))
+  }
+
+  function updateColorInventoryVisibility(){
+    ['white','black','blue'].forEach(color=>{
+      const cb = document.getElementById('color-' + color)
+      const block = document.querySelector('.color-block[data-color="' + color + '"]')
+      if(!block) return
+      block.style.display = (cb && cb.checked) ? '' : 'none'
+    })
   }
 
   function resetForm(){
@@ -86,6 +124,7 @@
       })
       // reset color checkboxes
       ['white','black','blue'].forEach(c=>{ const cb = document.getElementById('color-'+c); if(cb) cb.checked = true })
+      updateColorInventoryVisibility()
     }catch(e){ }
   }
 
@@ -155,6 +194,7 @@
             const top = document.getElementById('qty-'+sz)
             if(top) top.value = total || ''
           })
+          updateColorInventoryVisibility()
         }
       }catch(e){ console.warn('Failed to parse inventory', e) }
     }catch(e){
@@ -163,7 +203,10 @@
       try{ if(e && e.response && e.response.data && e.response.data.message) msg = e.response.data.message }catch(ex){}
       if(window.showNotification) showNotification(msg, 'error')
     }
-    finally{ try{ btn.disabled = false }catch(e){} }
+    finally{
+      try{ btn.disabled = false }catch(e){}
+      updateColorInventoryVisibility()
+    }
   }
 
   async function onDelete(e){
@@ -200,12 +243,6 @@
     form.append('price', parseInt(rawPrice || '0', 10) || 0)
     form.append('discount', parseFloat($('#prod-discount').value) || 0)
     form.append('brand', $('#prod-brand').value || '')
-    form.append('qty39', parseInt(document.getElementById('qty-39').value||0))
-    form.append('qty40', parseInt(document.getElementById('qty-40').value||0))
-    form.append('qty41', parseInt(document.getElementById('qty-41').value||0))
-    form.append('qty42', parseInt(document.getElementById('qty-42').value||0))
-    form.append('qty43', parseInt(document.getElementById('qty-43').value||0))
-    form.append('qty44', parseInt(document.getElementById('qty-44').value||0))
 
     const fileImage = document.getElementById('prod-image')
     const fileDetail = document.getElementById('prod-detail-images')
@@ -234,6 +271,21 @@
           })
         }
       })
+
+      // keep backward-compatible qty39..qty44 fields as totals across selected colors
+      const totals = { '39':0, '40':0, '41':0, '42':0, '43':0, '44':0 }
+      colors.forEach(color=>{
+        sizes.forEach(sz=>{
+          totals[sz] += (inventory[color] && inventory[color][sz]) ? parseInt(inventory[color][sz] || 0, 10) : 0
+        })
+      })
+      form.append('qty39', totals['39'])
+      form.append('qty40', totals['40'])
+      form.append('qty41', totals['41'])
+      form.append('qty42', totals['42'])
+      form.append('qty43', totals['43'])
+      form.append('qty44', totals['44'])
+
       form.append('inventory', JSON.stringify(inventory))
     }catch(err){
       console.error('Failed to build inventory', err)
@@ -308,6 +360,14 @@
     if(form) form.addEventListener('submit', onSave)
     const resetBtn = $('#reset-btn')
     if(resetBtn) resetBtn.addEventListener('click', resetForm)
+
+    ['white','black','blue'].forEach(color=>{
+      const cb = document.getElementById('color-' + color)
+      if(cb){
+        cb.addEventListener('change', updateColorInventoryVisibility)
+      }
+    })
+    updateColorInventoryVisibility()
 
     const imgInput = document.getElementById('prod-image')
     const detInput = document.getElementById('prod-detail-images')

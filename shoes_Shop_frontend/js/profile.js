@@ -72,7 +72,10 @@
     }catch(e){console.error(e)}
   }
 
-  function saveCurrentUser(cur){ localStorage.setItem('currentUser', JSON.stringify(cur)) }
+  function saveCurrentUser(cur){
+    localStorage.setItem('currentUser', JSON.stringify(cur))
+    try{ window.dispatchEvent(new Event('currentUserChanged')) }catch(e){}
+  }
 
   function renderAddresses(addrs){
     if(!addressesList) return
